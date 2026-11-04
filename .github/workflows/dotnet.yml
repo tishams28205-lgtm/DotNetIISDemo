@@ -47,7 +47,6 @@ jobs:
     name: Deploy to IIS
     needs: build
     if: github.event_name == 'push'
-
     runs-on: [self-hosted, Windows, X64]
 
     steps:
@@ -68,11 +67,12 @@ jobs:
 
           Write-Host "Starting IIS deployment..."
 
-          if (!(Test-Path $sourcePath)) {
+          # Verify source and destination
+          if (!(Test-Path -LiteralPath $sourcePath)) {
               throw "Published artifact folder not found!"
           }
 
-          if (!(Test-Path $deployPath)) {
+          if (!(Test-Path -LiteralPath $deployPath)) {
               throw "IIS deployment folder not found!"
           }
 
@@ -82,24 +82,27 @@ jobs:
 
               Start-Sleep -Seconds 5
 
-              # Copy published files to IIS
+              # Copy published files
               robocopy $sourcePath $deployPath /MIR /XF app_offline.htm /R:3 /W:5
 
-              $robocopyExitCode = $LASTEXITCODE
+              $copyResult = $LASTEXITCODE
 
-              Write-Host "Robocopy exit code: $robocopyExitCode"
+              Write-Host "Robocopy exit code: $copyResult"
 
-              if ($robocopyExitCode -ge 8) {
-                  throw "Robocopy deployment failed!"
+              if ($copyResult -ge 8) {
+                  throw "Robocopy deployment failed with exit code $copyResult"
               }
 
-              Write-Host "Application files deployed successfully!"
+              Write-Host "Application files copied successfully!"
           }
           finally {
-              # Bring application back online
-              if (Test-Path $offlineFile) {
-                  Remove-Item $offlineFile -Force
+              # Safely remove offline file if it still exists
+              if (Test-Path -LiteralPath $offlineFile) {
+                  Remove-Item -LiteralPath $offlineFile -Force
                   Write-Host "Application is back online!"
+              }
+              else {
+                  Write-Host "Offline file was already removed. No cleanup needed."
               }
           }
 
