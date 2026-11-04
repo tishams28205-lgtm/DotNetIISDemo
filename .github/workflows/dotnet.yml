@@ -5,11 +5,14 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
 
 jobs:
+
+  # JOB 1: BUILD AND PUBLISH
   build:
     name: Build and Publish
     runs-on: ubuntu-latest
@@ -18,7 +21,7 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -32,16 +35,19 @@ jobs:
       - name: Publish application
         run: dotnet publish DotNetIISDemo.csproj --configuration Release --output ./publish
 
-      - name: Upload published files
+      - name: Upload published artifact
         uses: actions/upload-artifact@v4
         with:
           name: DotNetIISDemo-publish
           path: ./publish/
+          retention-days: 5
 
+  # JOB 2: DEPLOY TO IIS
   deploy:
     name: Deploy to IIS
     needs: build
     if: github.event_name == 'push'
+
     runs-on: [self-hosted, Windows, X64]
 
     steps:
@@ -51,30 +57,50 @@ jobs:
           name: DotNetIISDemo-publish
           path: ./publish
 
-      - name: Deploy to IIS
+      - name: Deploy application to IIS
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
           $deployPath = "C:\inetpub\DotNetIISDemo"
           $sourcePath = "$env:GITHUB_WORKSPACE\publish"
+          $offlineFile = Join-Path $deployPath "app_offline.htm"
+
+          Write-Host "Starting IIS deployment..."
 
           if (!(Test-Path $sourcePath)) {
-              throw "Published files not found!"
+              throw "Published artifact folder not found!"
           }
 
           if (!(Test-Path $deployPath)) {
               throw "IIS deployment folder not found!"
           }
 
-          Set-Content -Path "$deployPath\app_offline.htm" -Value "Application updating..."
+          try {
+              # Take application offline
+              Set-Content -Path $offlineFile -Value "Application updating..."
 
-          Start-Sleep -Seconds 5
+              Start-Sleep -Seconds 5
 
-          robocopy $sourcePath $deployPath /MIR /R:3 /W:5
+              # Copy published files to IIS
+              robocopy $sourcePath $deployPath /MIR /XF app_offline.htm /R:3 /W:5
 
-          if ($LASTEXITCODE -ge 8) {
-              throw "Deployment failed. Robocopy exit code: $LASTEXITCODE"
+              $robocopyExitCode = $LASTEXITCODE
+
+              Write-Host "Robocopy exit code: $robocopyExitCode"
+
+              if ($robocopyExitCode -ge 8) {
+                  throw "Robocopy deployment failed!"
+              }
+
+              Write-Host "Application files deployed successfully!"
+          }
+          finally {
+              # Bring application back online
+              if (Test-Path $offlineFile) {
+                  Remove-Item $offlineFile -Force
+                  Write-Host "Application is back online!"
+              }
           }
 
-          Remove-Item "$deployPath\app_offline.htm" -Force
-
-          Write-Host "Deployment to IIS completed successfully!"
+          Write-Host "IIS deployment completed successfully!"

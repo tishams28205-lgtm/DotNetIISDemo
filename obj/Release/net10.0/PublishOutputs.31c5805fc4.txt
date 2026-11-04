@@ -1,0 +1,7 @@
+C:\inetpub\DotNetIISDemo\DotNetIISDemo.exe
+C:\inetpub\DotNetIISDemo\appsettings.Development.json
+C:\inetpub\DotNetIISDemo\appsettings.json
+C:\inetpub\DotNetIISDemo\DotNetIISDemo.dll
+C:\inetpub\DotNetIISDemo\DotNetIISDemo.deps.json
+C:\inetpub\DotNetIISDemo\DotNetIISDemo.runtimeconfig.json
+C:\inetpub\DotNetIISDemo\DotNetIISDemo.pdb
