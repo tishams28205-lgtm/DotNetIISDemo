@@ -62,12 +62,12 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $deployPath = "C:\inetpub\DotNetIISDemo"
-          $sourcePath = "$env:GITHUB_WORKSPACE\publish"
+          $sourcePath = Join-Path $env:GITHUB_WORKSPACE "publish"
           $offlineFile = Join-Path $deployPath "app_offline.htm"
 
           Write-Host "Starting IIS deployment..."
 
-          # Verify source and destination
+          # Verify deployment paths
           if (!(Test-Path -LiteralPath $sourcePath)) {
               throw "Published artifact folder not found!"
           }
@@ -78,32 +78,29 @@ jobs:
 
           try {
               # Take application offline
-              Set-Content -Path $offlineFile -Value "Application updating..."
+              Set-Content -LiteralPath $offlineFile -Value "Application updating..."
 
               Start-Sleep -Seconds 5
 
-              # Copy published files
+              # Synchronize published files
               robocopy $sourcePath $deployPath /MIR /XF app_offline.htm /R:3 /W:5
 
               $copyResult = $LASTEXITCODE
 
               Write-Host "Robocopy exit code: $copyResult"
 
+              # Robocopy codes below 8 indicate success
               if ($copyResult -ge 8) {
-                  throw "Robocopy deployment failed with exit code $copyResult"
+                  throw "Robocopy failed with exit code $copyResult"
               }
 
               Write-Host "Application files copied successfully!"
           }
           finally {
-              # Safely remove offline file if it still exists
-              if (Test-Path -LiteralPath $offlineFile) {
-                  Remove-Item -LiteralPath $offlineFile -Force
-                  Write-Host "Application is back online!"
-              }
-              else {
-                  Write-Host "Offline file was already removed. No cleanup needed."
-              }
+              # File.Delete does not fail if the file is missing
+              [System.IO.File]::Delete($offlineFile)
+
+              Write-Host "Offline file cleanup completed."
           }
 
           Write-Host "IIS deployment completed successfully!"
